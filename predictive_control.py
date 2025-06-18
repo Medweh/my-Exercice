@@ -12,6 +12,7 @@ assert len(w2) == time_steps
 A = 1.0       # state coefficient (integrator)
 B = 0.1       # input coefficient
 lam = 1.0     # input penalty in cost function
+N = 5         # prediction horizon
 
 # Initialize arrays
 u1 = np.zeros(time_steps)
@@ -19,10 +20,24 @@ u2 = np.zeros(time_steps)
 y1 = np.zeros(time_steps+1)
 y2 = np.zeros(time_steps+1)
 
+# Precompute matrices for the simple MPC
+F = B * np.tril(np.ones((N, N)))
+H = F.T @ F + lam * np.eye(N)
+invH = np.linalg.inv(H)
+
 for k in range(time_steps):
-    # Predictive control law for horizon 1
-    u1[k] = B * (w1[k] - A*y1[k]) / (B**2 + lam)
-    u2[k] = B * (w2[k] - A*y2[k]) / (B**2 + lam)
+    # Build reference vectors for the next N steps
+    ref1 = np.array([w1[min(k+i, time_steps-1)] for i in range(1, N+1)])
+    ref2 = np.array([w2[min(k+i, time_steps-1)] for i in range(1, N+1)])
+
+    delta1 = ref1 - y1[k]
+    delta2 = ref2 - y2[k]
+
+    U1 = invH @ (F.T @ delta1)
+    U2 = invH @ (F.T @ delta2)
+
+    u1[k] = U1[0]
+    u2[k] = U2[0]
 
     # Update process state
     y1[k+1] = A*y1[k] + B*u1[k]
